@@ -346,6 +346,12 @@ async function runExport(options: { target: string, naming: string, slashesToFol
           metadata.properties = variantProperties;
         }
 
+        // Extract and capture visual effects (shadows/blurs)
+        const nodeEffects = collectEffects(node);
+        if (nodeEffects.length > 0) {
+          metadata.effects = nodeEffects;
+        }
+
         // Export and push layers
         if (options.splitEffects && hasEffects(node)) {
           console.log(`[Plugin Main] Node "${node.name}" has effects, performing split file export...`);
@@ -566,6 +572,54 @@ function logToUI(message: string, level: 'info' | 'warn' | 'error' = 'info') {
   } catch (err) {
     console.error("Failed to send log to UI:", err);
   }
+}
+
+/**
+ * Recursively scans the node and its children for active/visible visual effects, returning a structured list.
+ */
+function collectEffects(node: SceneNode): any[] {
+  const visibleEffects: any[] = [];
+  
+  function traverse(currNode: SceneNode) {
+    if ('effects' in currNode && Array.isArray(currNode.effects)) {
+      currNode.effects.forEach(eff => {
+        if (eff.visible !== false) {
+          const baseEffect: Record<string, any> = {
+            type: eff.type,
+            visible: eff.visible,
+            nodeId: currNode.id,
+            nodeName: currNode.name
+          };
+
+          if (eff.type === "DROP_SHADOW" || eff.type === "INNER_SHADOW") {
+            const shadow = eff as DropShadowEffect | InnerShadowEffect;
+            baseEffect.color = shadow.color; // { r: number, g: number, b: number, a: number }
+            baseEffect.offset = shadow.offset; // { x: number, y: number }
+            baseEffect.radius = shadow.radius;
+            if ('spread' in shadow) {
+              baseEffect.spread = shadow.spread;
+            }
+            baseEffect.blendMode = shadow.blendMode;
+          } else if (eff.type === "LAYER_BLUR" || eff.type === "BACKGROUND_BLUR") {
+            const blur = eff as BlurEffect;
+            baseEffect.radius = blur.radius;
+          }
+          visibleEffects.push(baseEffect);
+        }
+      });
+    }
+    
+    if ('children' in currNode) {
+      try {
+        for (const child of currNode.children) {
+          traverse(child);
+        }
+      } catch (_) {}
+    }
+  }
+
+  traverse(node);
+  return visibleEffects;
 }
 
 /**

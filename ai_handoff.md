@@ -41,6 +41,7 @@ The plugin is split into two runtime environments as required by Figma's model:
     3. Replaces shapes' internal effects with a single layer blur matching the shadow radius and applies the shadow's opacity.
     4. Offsets position to match shadow offsets.
     5. This provides clean visual components that Godot can blend natively.
+* **Visual Effects Metadata (Normal Exports)**: When exporting normally (non-split), the plugin recursively scans the node and all of its nested children to extract details for active, visible visual effects (e.g. drop shadows, inner shadows, layer blurs, background blurs). These are recorded in `metadata.json` under the `effects` field, mapping the effect type, colors, coordinates, radius, and origin node info.
 
 ---
 

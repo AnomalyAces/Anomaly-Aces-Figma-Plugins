@@ -263,6 +263,10 @@ async function runExport(options) {
         if (Object.keys(variantProperties).length > 0) {
           metadata.properties = variantProperties;
         }
+        const nodeEffects = collectEffects(node);
+        if (nodeEffects.length > 0) {
+          metadata.effects = nodeEffects;
+        }
         if (options.splitEffects && hasEffects(node)) {
           console.log(`[Plugin Main] Node "${node.name}" has effects, performing split file export...`);
           logToUI(`Splitting effects layers for "${node.name}"...`);
@@ -439,6 +443,47 @@ function logToUI(message, level = "info") {
   } catch (err) {
     console.error("Failed to send log to UI:", err);
   }
+}
+function collectEffects(node) {
+  const visibleEffects = [];
+  function traverse(currNode) {
+    if ("effects" in currNode && Array.isArray(currNode.effects)) {
+      currNode.effects.forEach((eff) => {
+        if (eff.visible !== false) {
+          const baseEffect = {
+            type: eff.type,
+            visible: eff.visible,
+            nodeId: currNode.id,
+            nodeName: currNode.name
+          };
+          if (eff.type === "DROP_SHADOW" || eff.type === "INNER_SHADOW") {
+            const shadow = eff;
+            baseEffect.color = shadow.color;
+            baseEffect.offset = shadow.offset;
+            baseEffect.radius = shadow.radius;
+            if ("spread" in shadow) {
+              baseEffect.spread = shadow.spread;
+            }
+            baseEffect.blendMode = shadow.blendMode;
+          } else if (eff.type === "LAYER_BLUR" || eff.type === "BACKGROUND_BLUR") {
+            const blur = eff;
+            baseEffect.radius = blur.radius;
+          }
+          visibleEffects.push(baseEffect);
+        }
+      });
+    }
+    if ("children" in currNode) {
+      try {
+        for (const child of currNode.children) {
+          traverse(child);
+        }
+      } catch (_) {
+      }
+    }
+  }
+  traverse(node);
+  return visibleEffects;
 }
 function hasEffects(node) {
   if ("effects" in node && Array.isArray(node.effects) && node.effects.length > 0) {
