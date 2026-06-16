@@ -42,6 +42,9 @@ The plugin is split into two runtime environments as required by Figma's model:
     4. Offsets position to match shadow offsets.
     5. This provides clean visual components that Godot can blend natively.
 * **Visual Effects Metadata (Normal Exports)**: When exporting normally (non-split), the plugin recursively scans the node and all of its nested children to extract details for active, visible visual effects (e.g. drop shadows, inner shadows, layer blurs, background blurs). These are recorded in `metadata.json` under the `effects` field, mapping the effect type, colors, coordinates, radius, and origin node info.
+* **Fill Color Metadata**: During standard SVG exports, the plugin extracts visible paint/fill details:
+  * **Direct Fills (`fills` field)**: The fills (solid paint colors, gradients, etc.) applied directly to the exported node itself.
+  * **Child Fills (`childFills` field)**: Fills applied to any nested children within the node, recursively collected and tagged with the source node's name and ID.
 
 ---
 

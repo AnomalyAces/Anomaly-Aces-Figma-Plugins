@@ -267,6 +267,13 @@ async function runExport(options) {
         if (nodeEffects.length > 0) {
           metadata.effects = nodeEffects;
         }
+        const { fills, childFills } = collectFills(node);
+        if (fills.length > 0) {
+          metadata.fills = fills;
+        }
+        if (childFills.length > 0) {
+          metadata.childFills = childFills;
+        }
         if (options.splitEffects && hasEffects(node)) {
           console.log(`[Plugin Main] Node "${node.name}" has effects, performing split file export...`);
           logToUI(`Splitting effects layers for "${node.name}"...`);
@@ -484,6 +491,59 @@ function collectEffects(node) {
   }
   traverse(node);
   return visibleEffects;
+}
+function collectFills(node) {
+  const fills = [];
+  const childFills = [];
+  if ("fills" in node && Array.isArray(node.fills)) {
+    node.fills.forEach((paint) => {
+      if (paint.visible !== false) {
+        const baseFill = {
+          type: paint.type,
+          opacity: paint.opacity !== void 0 ? paint.opacity : 1
+        };
+        if (paint.type === "SOLID") {
+          baseFill.color = paint.color;
+        }
+        fills.push(baseFill);
+      }
+    });
+  }
+  function traverse(currNode) {
+    if ("fills" in currNode && Array.isArray(currNode.fills)) {
+      currNode.fills.forEach((paint) => {
+        if (paint.visible !== false) {
+          const baseFill = {
+            type: paint.type,
+            opacity: paint.opacity !== void 0 ? paint.opacity : 1,
+            nodeId: currNode.id,
+            nodeName: currNode.name
+          };
+          if (paint.type === "SOLID") {
+            baseFill.color = paint.color;
+          }
+          childFills.push(baseFill);
+        }
+      });
+    }
+    if ("children" in currNode) {
+      try {
+        for (const child of currNode.children) {
+          traverse(child);
+        }
+      } catch (_) {
+      }
+    }
+  }
+  if ("children" in node) {
+    try {
+      for (const child of node.children) {
+        traverse(child);
+      }
+    } catch (_) {
+    }
+  }
+  return { fills, childFills };
 }
 function hasEffects(node) {
   if ("effects" in node && Array.isArray(node.effects) && node.effects.length > 0) {

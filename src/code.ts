@@ -352,6 +352,15 @@ async function runExport(options: { target: string, naming: string, slashesToFol
           metadata.effects = nodeEffects;
         }
 
+        // Extract and capture fill colors (solid fills, gradients, etc.)
+        const { fills, childFills } = collectFills(node);
+        if (fills.length > 0) {
+          metadata.fills = fills;
+        }
+        if (childFills.length > 0) {
+          metadata.childFills = childFills;
+        }
+
         // Export and push layers
         if (options.splitEffects && hasEffects(node)) {
           console.log(`[Plugin Main] Node "${node.name}" has effects, performing split file export...`);
@@ -620,6 +629,69 @@ function collectEffects(node: SceneNode): any[] {
 
   traverse(node);
   return visibleEffects;
+}
+
+/**
+ * Recursively scans the node and its children for visible fill paints.
+ * Extracting direct fills under node and child fills recursively.
+ */
+function collectFills(node: SceneNode): { fills: any[], childFills: any[] } {
+  const fills: any[] = [];
+  const childFills: any[] = [];
+
+  // Direct fills of the exported node itself
+  if ('fills' in node && Array.isArray(node.fills)) {
+    node.fills.forEach(paint => {
+      if (paint.visible !== false) {
+        const baseFill: Record<string, any> = {
+          type: paint.type,
+          opacity: paint.opacity !== undefined ? paint.opacity : 1.0
+        };
+        if (paint.type === "SOLID") {
+          baseFill.color = (paint as SolidPaint).color;
+        }
+        fills.push(baseFill);
+      }
+    });
+  }
+
+  // Recursive fills for any children
+  function traverse(currNode: SceneNode) {
+    if ('fills' in currNode && Array.isArray(currNode.fills)) {
+      currNode.fills.forEach(paint => {
+        if (paint.visible !== false) {
+          const baseFill: Record<string, any> = {
+            type: paint.type,
+            opacity: paint.opacity !== undefined ? paint.opacity : 1.0,
+            nodeId: currNode.id,
+            nodeName: currNode.name
+          };
+          if (paint.type === "SOLID") {
+            baseFill.color = (paint as SolidPaint).color;
+          }
+          childFills.push(baseFill);
+        }
+      });
+    }
+
+    if ('children' in currNode) {
+      try {
+        for (const child of currNode.children) {
+          traverse(child);
+        }
+      } catch (_) {}
+    }
+  }
+
+  if ('children' in node) {
+    try {
+      for (const child of node.children) {
+        traverse(child);
+      }
+    } catch (_) {}
+  }
+
+  return { fills, childFills };
 }
 
 /**
