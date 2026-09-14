@@ -282,7 +282,11 @@ async function runExport(options) {
           try {
             contentClone = node.clone();
             stripEffects(contentClone);
-            const contentBytes = await contentClone.exportAsync({ format: "SVG" });
+            const contentBytes = normalizeSvgViewport(
+              await contentClone.exportAsync({ format: "SVG" }),
+              node.width,
+              node.height
+            );
             chunkData.push({
               id: node.id,
               name: `${node.name}/content`,
@@ -349,7 +353,11 @@ async function runExport(options) {
             }
           }
         } else {
-          const svgBytes = await node.exportAsync({ format: "SVG" });
+          const svgBytes = normalizeSvgViewport(
+            await node.exportAsync({ format: "SVG" }),
+            node.width,
+            node.height
+          );
           chunkData.push({
             id: node.id,
             name: node.name,
@@ -657,4 +665,34 @@ function stringToUint8Array(str) {
     arr[i] = str.charCodeAt(i) & 255;
   }
   return arr;
+}
+function normalizeSvgViewport(svgBytes, targetWidth, targetHeight) {
+  if (targetWidth <= 0 || targetHeight <= 0) {
+    return svgBytes;
+  }
+  const svg = uint8ArrayToString(svgBytes);
+  const rootMatch = svg.match(/<svg\b([^>]*)>/i);
+  if (!rootMatch) {
+    return svgBytes;
+  }
+  const attributes = rootMatch[1];
+  const widthMatch = attributes.match(/\bwidth\s*=\s*["']([0-9.+-]+)(?:px)?["']/i);
+  const heightMatch = attributes.match(/\bheight\s*=\s*["']([0-9.+-]+)(?:px)?["']/i);
+  const viewBoxMatch = attributes.match(/\bviewBox\s*=\s*["']\s*([0-9.+-]+)[,\s]+([0-9.+-]+)[,\s]+([0-9.+-]+)[,\s]+([0-9.+-]+)\s*["']/i);
+  if (!widthMatch || !heightMatch || !viewBoxMatch) {
+    return svgBytes;
+  }
+  const exportedWidth = Number(widthMatch[1]);
+  const exportedHeight = Number(heightMatch[1]);
+  const viewX = Number(viewBoxMatch[1]);
+  const viewY = Number(viewBoxMatch[2]);
+  const viewWidth = Number(viewBoxMatch[3]);
+  const viewHeight = Number(viewBoxMatch[4]);
+  if (!Number.isFinite(exportedWidth) || !Number.isFinite(exportedHeight) || !Number.isFinite(viewX) || !Number.isFinite(viewY) || !Number.isFinite(viewWidth) || !Number.isFinite(viewHeight) || viewWidth <= targetWidth || viewHeight <= targetHeight) {
+    return svgBytes;
+  }
+  const croppedX = viewX + (viewWidth - targetWidth) / 2;
+  const croppedY = viewY + (viewHeight - targetHeight) / 2;
+  const replacement = `<svg${attributes.replace(/\bwidth\s*=\s*["'][^"']*["']/i, `width="${targetWidth}"`).replace(/\bheight\s*=\s*["'][^"']*["']/i, `height="${targetHeight}"`).replace(/\bviewBox\s*=\s*["'][^"']*["']/i, `viewBox="${croppedX} ${croppedY} ${targetWidth} ${targetHeight}"`)}>`;
+  return stringToUint8Array(svg.replace(rootMatch[0], replacement));
 }
